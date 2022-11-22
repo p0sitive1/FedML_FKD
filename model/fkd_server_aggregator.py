@@ -83,7 +83,9 @@ class FedMLAggregator(object):
                 else:
                     averaged_params[k] += local_model_params[k] * w
 
-        logging.info(f"server side doing stuff {i}")
+        # let server do things
+        for i in range(5):
+            logging.info(f"server side doing stuff {i}")
 
         end_time = time.time()
         logging.info("aggregate time cost: %d" % (end_time - start_time))

@@ -28,9 +28,9 @@ class LinearNet(nn.Module):
         return F.log_softmax(x)
 
 
-class FedGen(nn.Module):
+class Generator(nn.Module):
     def __init__(self):
-        super(FedGen, self).__init__()
+        super(Generator, self).__init__()
         self.latent_layer_idx = -1
         self.hidden_dim, self.latent_dim, self.input_channel, self.n_class, self.noise_dim = 256, 32, 1, 10, 32
         input_dim = self.noise_dim + self.n_class

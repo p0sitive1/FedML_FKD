@@ -40,3 +40,6 @@ class ServerFKD():
             )
         else:
             raise Exception("Exception")
+    
+    def run(self):
+        pass

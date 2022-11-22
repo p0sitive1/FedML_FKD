@@ -7,7 +7,7 @@ import fedml
 from model.serverFKD import ServerFKD
 from fedml.cross_device import ServerMNN
 from my_dataset import MnistDataset
-from FedGen.FedGen import FedGen, LinearNet
+# from FedGen.FedGen import Generator, LinearNet
 
 if __name__ == "__main__":
     # init FedML framework
@@ -26,11 +26,11 @@ if __name__ == "__main__":
     class_num = 10
 
     # load model
-    model = [FedGen(), LinearNet()]
-    # fedml.model.create(args, output_dim=class_num)
+    # model = [Generator(), LinearNet()]
+    fedml.model.create(args, output_dim=class_num)
 
     # start training
     server = ServerFKD(
-        args, device, test_dataloader, model
+        args, device, test_dataloader, None
     )  # for MNN, the model is loaded using MNN file
     server.run()
