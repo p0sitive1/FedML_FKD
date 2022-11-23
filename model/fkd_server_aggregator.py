@@ -66,10 +66,14 @@ class FedMLAggregator(object):
             logging.info("self.model_dict[idx] = {}".format(self.model_dict[idx]))
             mnn_file_path = self.model_dict[idx]
             tensor_params_dict = read_mnn_as_tensor_dict(mnn_file_path)  # Read model file here
+            logging.info(f"worker {idx} model: ")
+            for key, value in tensor_params_dict.items():
+                logging.info('{}: {}'.format(key, value.shape))
             # logging.info(f"{idx} worker's model: {tensor_params_dict}")
             model_list.append((self.sample_num_dict[idx], tensor_params_dict))
             training_num += self.sample_num_dict[idx]
         logging.info("training_num = {}".format(training_num))
+        logging.info(f"Number of models {len(model_list)}")
         logging.info("len of self.model_dict[idx] = " + str(len(self.model_dict)))
 
         # logging.info("################aggregate: %d" % len(model_list))
@@ -77,15 +81,20 @@ class FedMLAggregator(object):
         for k in averaged_params.keys():
             for i in range(0, len(model_list)):
                 local_sample_number, local_model_params = model_list[i]
-                w = local_sample_number / training_num
                 if i == 0:
-                    averaged_params[k] = local_model_params[k] * w
+                    averaged_params[k] = local_model_params[k]
                 else:
-                    averaged_params[k] += local_model_params[k] * w
+                    averaged_params[k] += local_model_params[k]
+                    averaged_params[k] /= 2
+                # w = local_sample_number / training_num
+                # if i == 0:
+                #     averaged_params[k] = local_model_params[k] * w
+                # else:
+                #     averaged_params[k] += local_model_params[k] * w
 
-        # let server do things
-        for i in range(5):
-            logging.info(f"server side doing stuff {i}")
+        # # let server do things
+        # for i in range(5):
+        #     logging.info(f"server side doing stuff {i}")
 
         end_time = time.time()
         logging.info("aggregate time cost: %d" % (end_time - start_time))
