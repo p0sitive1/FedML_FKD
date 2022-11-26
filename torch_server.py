@@ -1,6 +1,7 @@
 import os
 from os.path import expanduser
 
+# import torchvision.datasets as datasets
 import MNN
 
 import fedml
@@ -26,7 +27,7 @@ if __name__ == "__main__":
     class_num = 10
 
     # load model
-    model = [Generator(), LinearNet()]
+    model = LinearNet()
     # fedml.model.create(args, output_dim=class_num)
 
     # start training

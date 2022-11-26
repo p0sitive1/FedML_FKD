@@ -6,12 +6,21 @@ import wandb
 
 import fedml
 from fedml import mlops
+import torch
+import torch.nn.functional as f
+from torch.utils.data import Dataset, DataLoader
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
+import tqdm
+
+from .utils import Models
 
 F = MNN.expr
 nn = MNN.nn
 
 from .utils import read_mnn_as_tensor_dict
 import logging
+from FedGen.FedGen import LinearNet, Linear
 
 
 class FedMLAggregator(object):
@@ -76,30 +85,85 @@ class FedMLAggregator(object):
         logging.info(f"Number of models {len(model_list)}")
         logging.info("len of self.model_dict[idx] = " + str(len(self.model_dict)))
 
-        # logging.info("################aggregate: %d" % len(model_list))
-        (num0, averaged_params) = model_list[0]
-        for k in averaged_params.keys():
-            for i in range(0, len(model_list)):
-                local_sample_number, local_model_params = model_list[i]
-                if i == 0:
-                    averaged_params[k] = local_model_params[k]
-                else:
-                    averaged_params[k] += local_model_params[k]
-                    averaged_params[k] /= 2
-                # w = local_sample_number / training_num
-                # if i == 0:
-                #     averaged_params[k] = local_model_params[k] * w
-                # else:
-                #     averaged_params[k] += local_model_params[k] * w
+        ######################FKD here##################
+                    
+        # generate temp dataset
+        temp_trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transforms.Compose([
+                               transforms.ToTensor(),
+                               transforms.Normalize((0.1307,), (0.3081,))
+                           ]))
+        temp_train = DataLoader(temp_trainset)
+        client_models = []
 
-        # # let server do things
-        # for i in range(5):
-        #     logging.info(f"server side doing stuff {i}")
+
+        for i in range(0, len(model_list)):
+            local_sample_number, local_model_params = model_list[i]
+            local_model_dict = dict()
+            actual_keys = ["fc2.bias", "fc2.weight", "fc1.bias", "fc1.weight", "conv2.weight", "conv2.bias", "conv1.weight", "conv1.bias"]
+            for key, value in local_model_params.items():
+                if key == 0 or key == 2:
+                    value = value.reshape(-1)
+                local_model_dict[actual_keys[key]] = value
+            temp_model = Linear()
+            temp_model.load_state_dict(local_model_dict)
+            temp_model.eval()
+            temp_client = Models(temp_model)
+            client_models.append(temp_client)
+            print("models constructed")
+
+        logging.info(f"Global knowledge distillation starts")
+        for t in range(3):
+            logging.info(f"Distillation round {t}")
+            for _, (images_pub, labels_pub) in enumerate(temp_train):
+                images_pub, labels_pub = images_pub.to(self.device), labels_pub.to(self.device)
+                total_logit = None
+                for i in range(0, len(client_models)):
+                    client_models[i].model.eval()
+                    output = client_models[i].model(images_pub)
+                    if total_logit is None:
+                        total_logit = output.detach().clone()
+                    else:
+                        total_logit += output.detach().clone()
+
+                for i in range(0, len(client_models)):
+                    client_models[i].model.train()
+                    client_models[i].optimizer.zero_grad()
+                    output_pub = client_models[i].model(images_pub)
+
+                    avg_logit_except_self = (total_logit.clone() - output_pub) / (len(model_list))
+                    # only one client 
+                    avg_prob_except_self = torch.nn.functional.softmax(avg_logit_except_self / 1)
+                    loss_kd = torch.nn.KLDivLoss(reduction="batchmean")(
+                        f.log_softmax(output_pub / 1),
+                        avg_prob_except_self.detach())
+                    loss = 1 * loss_kd
+                    loss.backward()
+                    client_models[i].optimizer.step()
+
+        logging.info(f"Global knowledge distillation completes")
+
+        tmp_model = client_models[0]
+        state_dict = tmp_model.model.state_dict()
+
+        send_dict = dict()
+        actual_keys = ["fc2.bias", "fc2.weight", "fc1.bias", "fc1.weight", "conv2.weight", "conv2.bias", "conv1.weight", "conv1.bias"]
+        for key, value in state_dict.items():
+            if actual_keys.index(key) == 0 or actual_keys.index(key) == 2:
+                tmp = value.shape[0]
+                value = value.reshape([1, tmp])
+            send_dict[actual_keys.index(key)] = value.cpu()
+        send_dict = dict(sorted(send_dict.items()))
+
+        logging.info(f"send model: ")
+        for key, value in send_dict.items():
+            logging.info('{}: {}'.format(key, value.shape))
+        
+        # torch.save(client_models[0], self.args.global_model_file_path)
 
         end_time = time.time()
         logging.info("aggregate time cost: %d" % (end_time - start_time))
-        return averaged_params
-
+        return send_dict
+    
     def data_silo_selection(self, round_idx, data_silo_num_in_total, client_num_in_total):
         """
 
