@@ -3,6 +3,8 @@
 pip install fedml
 ```
 
+### GPU is needed
+
 # Building server package
 
 ```

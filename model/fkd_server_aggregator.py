@@ -130,8 +130,7 @@ class FedMLAggregator(object):
                     client_models[i].optimizer.zero_grad()
                     output_pub = client_models[i].model(images_pub)
 
-                    avg_logit_except_self = (total_logit.clone() - output_pub) / (len(model_list))
-                    # only one client 
+                    avg_logit_except_self = (total_logit.clone() - output_pub) / (len(model_list) - 1)
                     avg_prob_except_self = torch.nn.functional.softmax(avg_logit_except_self / 1)
                     loss_kd = torch.nn.KLDivLoss(reduction="batchmean")(
                         f.log_softmax(output_pub / 1),
